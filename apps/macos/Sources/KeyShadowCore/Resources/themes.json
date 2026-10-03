@@ -1,0 +1,86 @@
+[
+  {
+    "id": "navy",
+    "name": "深海蓝",
+    "colors": {
+      "background": "171F2B",
+      "ink": "EDF4F6",
+      "muted": "9CADBC",
+      "final": "89E4D1",
+      "initial": "FAC882",
+      "border": "3F4E5E",
+      "button": "24303E",
+      "buttonHover": "3E4D5E",
+      "key": "232E3C",
+      "specialKey": "303131",
+      "specialBorder": "705E44",
+      "activeKey": "3D746A",
+      "nextKey": "254342",
+      "keyBorder": "384757",
+      "guide": "1D2A36"
+    }
+  },
+  {
+    "id": "graphite",
+    "name": "石墨灰",
+    "colors": {
+      "background": "242426",
+      "ink": "F3F3F4",
+      "muted": "BAB9C1",
+      "final": "A9D2FF",
+      "initial": "F1C591",
+      "border": "54545B",
+      "button": "35353B",
+      "buttonHover": "484851",
+      "key": "303036",
+      "specialKey": "3A342E",
+      "specialBorder": "9D805C",
+      "activeKey": "375676",
+      "nextKey": "2D3E54",
+      "keyBorder": "52525B",
+      "guide": "2B2C32"
+    }
+  },
+  {
+    "id": "cream",
+    "name": "暖米白",
+    "colors": {
+      "background": "F3EEE5",
+      "ink": "302D29",
+      "muted": "655E54",
+      "final": "176158",
+      "initial": "804A10",
+      "border": "C5BCAF",
+      "button": "E4DCCE",
+      "buttonHover": "D5CABB",
+      "key": "FFFCF7",
+      "specialKey": "F2E4CF",
+      "specialBorder": "C4A67D",
+      "activeKey": "ADD6C9",
+      "nextKey": "D8EAE0",
+      "keyBorder": "CCC3B6",
+      "guide": "E6E1D7"
+    }
+  },
+  {
+    "id": "lavender",
+    "name": "薰衣紫",
+    "colors": {
+      "background": "282337",
+      "ink": "F6F0FF",
+      "muted": "BFB1CF",
+      "final": "D2BAFF",
+      "initial": "F5C997",
+      "border": "5E5076",
+      "button": "3B314F",
+      "buttonHover": "514367",
+      "key": "352D47",
+      "specialKey": "433745",
+      "specialBorder": "A08472",
+      "activeKey": "594975",
+      "nextKey": "483A62",
+      "keyBorder": "635376",
+      "guide": "302A43"
+    }
+  }
+]

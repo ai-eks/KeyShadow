@@ -1,0 +1,169 @@
+name: Package Windows and macOS
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      sign_macos:
+        description: Sign and notarize macOS packages (requires Apple secrets)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos:
+    name: Package macOS universal
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      SIGN_MACOS: ${{ startsWith(github.ref, 'refs/tags/') || inputs.sign_macos == true }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Validate package version and release tag
+        shell: bash
+        run: |
+          version="$(tr -d '\r\n' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::VERSION must contain a three-part numeric version.'
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo '::error::Release tag must equal v<VERSION>.'
+            exit 1
+          fi
+      - name: Check Windows data parity and test core behavior
+        run: apps/macos/tools/test.sh
+      - name: Import Developer ID and configure notarization
+        if: env.SIGN_MACOS == 'true'
+        env:
+          CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APP_IDENTITY: ${{ secrets.DEVELOPER_ID_APP_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+        shell: bash
+        run: |
+          for name in CERT_BASE64 CERT_PASSWORD APP_IDENTITY KEYCHAIN_PASSWORD KEY_ID ISSUER_ID API_KEY_BASE64; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing signing setting: $name. See docs/打包与发布.md."
+              exit 1
+            fi
+          done
+          umask 077
+          certificate="$RUNNER_TEMP/keyshadow-developer-id.p12"
+          api_key="$RUNNER_TEMP/keyshadow-notary.p8"
+          keychain="$RUNNER_TEMP/keyshadow-signing.keychain-db"
+          trap 'rm -f "$certificate" "$api_key"' EXIT
+          printf '%s' "$CERT_BASE64" | base64 --decode > "$certificate"
+          printf '%s' "$API_KEY_BASE64" | base64 --decode > "$api_key"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          security import "$certificate" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain" > /dev/null
+          xcrun notarytool store-credentials keyshadow-notary --keychain "$keychain" \
+            --key "$api_key" --key-id "$KEY_ID" --issuer "$ISSUER_ID"
+      - name: Build and verify DMG
+        env:
+          KEYSHADOW_SIGN_IDENTITY: ${{ env.SIGN_MACOS == 'true' && secrets.DEVELOPER_ID_APP_IDENTITY || '-' }}
+          KEYSHADOW_NOTARIZE: ${{ env.SIGN_MACOS == 'true' && '1' || '0' }}
+          KEYSHADOW_NOTARY_PROFILE: keyshadow-notary
+          KEYSHADOW_SIGNING_KEYCHAIN: ${{ runner.temp }}/keyshadow-signing.keychain-db
+        run: apps/macos/tools/package.sh
+      - name: Verify packaged macOS visibility and privacy behavior
+        run: dist/macos/键影.app/Contents/MacOS/KeyShadow --smoke-test --output "$RUNNER_TEMP/keyshadow-smoke"
+      - name: Upload macOS packages
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: KeyShadow-macOS
+          path: |
+            dist/packages/*-macOS-universal.dmg
+            dist/packages/*-macOS-universal.dmg.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Package summary
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          echo "macOS universal DMG: $ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Developer ID signing and Apple notarization: $SIGN_MACOS" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove temporary signing material
+        if: always() && env.SIGN_MACOS == 'true'
+        run: |
+          keychain="$RUNNER_TEMP/keyshadow-signing.keychain-db"
+          if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
+          rm -f "$RUNNER_TEMP/keyshadow-developer-id.p12" "$RUNNER_TEMP/keyshadow-notary.p8"
+
+  windows:
+    name: Package Windows
+    runs-on: windows-2022
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test Windows schemes
+        run: .\apps\windows\tools\Test.ps1
+      - name: Build and verify standalone EXE
+        run: .\apps\windows\tools\Package.ps1
+      - name: Upload Windows package
+        id: artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: KeyShadow-Windows
+          path: |
+            dist/packages/*-Windows.exe
+            dist/packages/*-Windows.exe.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Package summary
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          "Windows standalone EXE (unsigned): $env:ARTIFACT_URL" >> $env:GITHUB_STEP_SUMMARY
+
+  release:
+    name: Publish versioned release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: KeyShadow-*
+          merge-multiple: true
+          path: packages
+      - name: Verify checksums and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          cd packages
+          sha256sum --check ./*.sha256
+          gh release create "$GITHUB_REF_NAME" ./*.dmg ./*.exe ./*.sha256 \
+            --verify-tag --generate-notes --title "键影 $GITHUB_REF_NAME" \
+            --notes 'macOS: Developer ID signed and Apple notarized universal DMG. Windows: unsigned standalone EXE. SHA256 checksums are included.'
