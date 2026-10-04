@@ -1,0 +1,24 @@
+{
+  "releases": [
+    {
+      "version": "0.1.0",
+      "date": "2026-10-03",
+      "zh": {
+        "title": "首次开源发布",
+        "items": [
+          "Windows 单文件 EXE 与 macOS 通用 DMG（已签名并公证）。",
+          "小鹤、自然码、微软、智能 ABC 四套方案，下一键与拼音提示。",
+          "自动跟随或固定位置、输入时或常驻显示、紧凑布局与四种配色。"
+        ]
+      },
+      "en": {
+        "title": "First open-source release",
+        "items": [
+          "Single-file Windows EXE and universal macOS DMG (signed and notarized).",
+          "Xiaohe, Ziranma, Microsoft, and Intelligent ABC schemes with next-key and pinyin hints.",
+          "Follow-input or fixed position, show-while-typing or always-on, compact layout, and four color themes."
+        ]
+      }
+    }
+  ]
+}
