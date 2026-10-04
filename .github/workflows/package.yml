@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Validate package version and release tag
+      - name: Validate package version, release tag, and changelog
         shell: bash
         run: |
           version="$(tr -d '\r\n' < VERSION)"
@@ -42,6 +42,7 @@ jobs:
             echo '::error::Release tag must equal v<VERSION>.'
             exit 1
           fi
+          python3 tools/changelog.py check
       - name: Check Windows data parity and test core behavior
         run: apps/macos/tools/test.sh
       - name: Import Developer ID and configure notarization
@@ -151,6 +152,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@v8
         with:
           pattern: KeyShadow-*
@@ -162,8 +166,10 @@ jobs:
           GH_REPO: ${{ github.repository }}
         shell: bash
         run: |
+          # Bilingual notes from docs/changelog.json come first; GitHub appends the generated PR list.
+          python3 tools/changelog.py notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
           cd packages
           sha256sum --check ./*.sha256
           gh release create "$GITHUB_REF_NAME" ./*.dmg ./*.exe ./*.sha256 \
             --verify-tag --generate-notes --title "键影 $GITHUB_REF_NAME" \
-            --notes 'macOS: Developer ID signed and Apple notarized universal DMG. Windows: unsigned standalone EXE. SHA256 checksums are included.'
+            --notes-file "$RUNNER_TEMP/release-notes.md"
